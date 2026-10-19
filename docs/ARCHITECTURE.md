@@ -2,14 +2,14 @@
 
 > How the pieces fit together. This document is the map a new contributor
 > reads before opening a PR, the reviewer consults before approving one, and
-> the grant committee reads to understand what is actually being built.
+> the reference contributors and integrators read to understand what is actually built.
 >
 > Scope: the intent router, the reputation write path, the Soroban oracle,
 > the MCP/agent surface, and the SEP-10/24/38 flow. Where something ships
 > today it is marked ✅; where it is planned it is marked 🛠️ and the
 > milestone wave is named.
 
-**Last reviewed:** 2026-08-28
+**Last reviewed:** 2026-10-18
 
 ---
 
@@ -35,9 +35,9 @@ Stellar Intel is three planes sharing one vocabulary (the intent):
 
 - **Control plane** — the Next.js app (web UI + API routes) and the MCP server.
   Both consume the same router and oracle primitives.
-- **Execution plane** — the anchors (MoneyGram, Cowrie, Anclap today) reached
+- **Execution plane** — the 13 registered anchors (listed in `constants/anchors.ts`) reached
   over SEP-10/24/38, and the Stellar ledger itself for payment submission.
-- **Observation plane** — the Soroban reputation oracle on mainnet, fed by a
+- **Observation plane** — the Soroban reputation oracle on testnet (mainnet gated — see docs/MAINNET_LAUNCH.md), fed by a
   publisher worker; read permissionlessly by any third party.
 
 ```mermaid
@@ -55,7 +55,7 @@ flowchart LR
   end
 
   subgraph Execution["Execution plane"]
-    Anchors["Anchors\n(MoneyGram, Cowrie, Anclap)"]
+    Anchors["Anchors\n(13 registered)"]
     Horizon["Stellar Horizon\nmainnet"]
   end
 
@@ -88,28 +88,28 @@ writes to Soroban — never to move user funds.
 
 ## 2. Component inventory & repo layout
 
-| Module                      | Role                                                                                                             | Path                                   | Status                  |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ----------------------- |
-| **Offramp page**            | The end-user surface. Corridor select → rate table → execute drawer → status tracker.                            | `app/offramp/page.tsx`                 | ✅                      |
-| **RateTable**               | Sortable list of live anchor quotes for the selected corridor.                                                   | `components/offramp/RateTable.tsx`     | ✅                      |
-| **ExecuteDrawer**           | 6-step SEP-10/24 off-ramp: `authenticating → initiating → kyc → building → signing → done`.                      | `components/offramp/ExecuteDrawer.tsx` | ✅                      |
-| **StatusTracker**           | Polls `/transaction?id=...` and renders the SEP-24 state machine.                                                | `components/offramp/StatusTracker.tsx` | ✅                      |
-| **Anchor registry**         | Typed list of anchors + corridors + assets. Single source of truth.                                              | `lib/stellar/anchors.ts`               | ✅                      |
-| **SEP-1 resolver**          | `stellar.toml` discovery, TRANSFER_SERVER_SEP0024 + WEB_AUTH_ENDPOINT extraction.                                | `lib/stellar/sep1.ts`                  | ✅                      |
-| **SEP-10 client**           | Challenge fetch, verification, Freighter sign, JWT exchange. Network pinned to mainnet.                          | `lib/stellar/sep10.ts`                 | ✅                      |
-| **SEP-24 client**           | `/fee`, `/transactions/withdraw/interactive`, `/transaction` wrappers. 10s timeout.                              | `lib/stellar/sep24.ts`                 | ✅                      |
-| **Horizon helper**          | Build + sign + submit the user's withdrawal payment on the Stellar ledger.                                       | `lib/stellar/horizon.ts`               | ✅                      |
-| **Freighter hook**          | Wallet connection state + account + network.                                                                     | `hooks/useFreighter.ts`                | ✅                      |
-| **Rates hook**              | SWR-powered parallel rate aggregation across all anchors on a corridor.                                          | `hooks/useAnchorRates.ts`              | ✅                      |
-| **Status hook**             | SWR polling loop keyed by `[transferServer, transactionId, jwt]`.                                                | `hooks/useWithdrawStatus.ts`           | ✅                      |
-| **SEP-38 client**           | Firm-quote RFQ against anchors; supersedes the `/fee` + stored-rate approach.                                    | `lib/stellar/sep38.ts`                 | ✅                      |
-| **Intent canonicalizer**    | Deterministic JSON → hash → sign.                                                                                | `lib/intent/`                          | ✅                      |
-| **Intent router (solver)**  | Scores candidate anchors by net landed value; returns a single-anchor or split plan.                             | `lib/router/`                          | ✅                      |
-| **Reputation store**        | Outcome storage + composite scoring (SQLite dev / Postgres prod).                                                | `lib/reputation/`                      | ✅                      |
-| **Publisher worker**        | Signs outcome tuples and invokes the Soroban contract. Scheduler entry point: `app/api/publisher/tick/route.ts`. | `packages/publisher/`                  | ✅ testnet              |
-| **Soroban oracle contract** | On-chain reputation storage + read helpers.                                                                      | `contracts/reputation/`                | ✅ testnet · 🛠️ mainnet |
-| **MCP server**              | Exposes router + oracle as MCP tools.                                                                            | `packages/mcp/`                        | ✅ basic                |
-| **SDK**                     | Typed client for the API + MCP.                                                                                  | `packages/sdk/`                        | ✅ built, unpublished   |
+| Module                      | Role                                                                                                                           | Path                                                                | Status                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- | ----------------------- |
+| **Offramp page**            | The end-user surface. Corridor select → rate table → execute drawer → status tracker.                                          | `app/offramp/page.tsx`                                              | ✅                      |
+| **RateTable**               | Sortable list of live anchor quotes for the selected corridor.                                                                 | `components/offramp/RateTable.tsx`                                  | ✅                      |
+| **ExecuteDrawer**           | Interactive off-ramp flow walking steps from idle to done (SEP-10 auth, SEP-38 quote, SEP-24/SEP-6 KYC, payment build & sign). | `components/offramp/ExecuteDrawer.tsx`                              | ✅                      |
+| **StatusTracker**           | Polls `/transaction?id=...` and renders the SEP-24 state machine.                                                              | `components/offramp/StatusTracker.tsx`                              | ✅                      |
+| **Anchor registry**         | Typed list of anchors + corridors + assets. Single source of truth.                                                            | `constants/anchors.ts` (data), `lib/stellar/anchors.ts` (accessors) | ✅                      |
+| **SEP-1 resolver**          | `stellar.toml` discovery, TRANSFER_SERVER_SEP0024 + WEB_AUTH_ENDPOINT extraction.                                              | `lib/stellar/sep1.ts`                                               | ✅                      |
+| **SEP-10 client**           | Challenge fetch, verification, Freighter sign, JWT exchange. Network pinned to mainnet.                                        | `lib/stellar/sep10.ts`                                              | ✅                      |
+| **SEP-24 client**           | `/fee`, `/transactions/withdraw/interactive`, `/transaction` wrappers. 10s timeout.                                            | `lib/stellar/sep24.ts`                                              | ✅                      |
+| **Horizon helper**          | Build + sign + submit the user's withdrawal payment on the Stellar ledger.                                                     | `lib/stellar/horizon.ts`                                            | ✅                      |
+| **Freighter hook**          | Wallet connection state + account + network.                                                                                   | `hooks/useFreighter.ts`                                             | ✅                      |
+| **Rates hook**              | SWR-powered parallel rate aggregation across all anchors on a corridor.                                                        | `hooks/useAnchorRates.ts`                                           | ✅                      |
+| **Status hook**             | SWR polling loop keyed by `[transferServer, transactionId, jwt]`.                                                              | `hooks/useWithdrawStatus.ts`                                        | ✅                      |
+| **SEP-38 client**           | Firm-quote RFQ against anchors; supersedes the `/fee` + stored-rate approach.                                                  | `lib/stellar/sep38.ts`                                              | ✅                      |
+| **Intent canonicalizer**    | Deterministic JSON → hash → sign.                                                                                              | `lib/intent/`                                                       | ✅                      |
+| **Intent router (solver)**  | Scores candidate anchors by net landed value; returns a single-anchor or split plan.                                           | `lib/router/`                                                       | ✅                      |
+| **Reputation store**        | Outcome storage + composite scoring (SQLite dev / Postgres prod).                                                              | `lib/reputation/`                                                   | ✅                      |
+| **Publisher worker**        | Signs outcome tuples and invokes the Soroban contract. Scheduler entry point: `app/api/publisher/tick/route.ts`.               | `packages/publisher/`                                               | ✅ testnet              |
+| **Soroban oracle contract** | On-chain reputation storage + read helpers.                                                                                    | `contracts/reputation/`                                             | ✅ testnet · 🛠️ mainnet |
+| **MCP server**              | Exposes router + oracle as MCP tools.                                                                                          | `packages/mcp/`                                                     | ✅ basic                |
+| **SDK**                     | Typed client for the API + MCP.                                                                                                | `packages/sdk/`                                                     | ✅ built, unpublished   |
 
 > All module paths are namespaced — no runtime concern spans two modules in
 > opposite directions. `lib/stellar/*` has no dependencies on `lib/router/*`
@@ -122,31 +122,13 @@ writes to Soroban — never to move user funds.
 An **intent** is the user's signed, canonicalized statement of purpose. It is
 the atomic unit every other component is built around.
 
-```ts
-// types/intent.ts — planned shape
-interface Intent {
-  version: 1;
-  nonce: string; // 128-bit random, replay protection
-  account: string; // user's Stellar public key
-  corridor: `${string}-${string}`; // e.g. 'usdc-ngn'
-  sellAsset: { code: string; issuer: string };
-  sellAmount: string; // decimal string
-  buyAsset: { code: string }; // fiat, e.g. 'NGN'
-  minReceive: string; // floor on delivered amount
-  deliveryHint: DeliveryHint; // bank / mobile-money / cash pickup
-  deadline: string; // RFC3339
-  preferences?: {
-    allowSplit: boolean; // default: true
-    maxAnchors: number; // default: 2
-    preferAnchorIds?: string[]; // user whitelist
-  };
-}
-interface SignedIntent {
-  intent: Intent;
-  intentHash: string; // sha-256 over canonical JSON
-  signature: string; // ed25519 over intentHash, by account
-}
-```
+The intent core and envelopes are defined by Zod schemas in `types/intent.ts` (`OfframpIntentSchema`, `SignedIntentEnvelopeSchema`, `IntentV1Schema`, `CanonicalIntentV1Schema`) and `lib/intent/offramp.ts` (`IntentSchema`).
+
+An intent carries:
+
+- `anchorId`, `corridorId`, `amount`, and `publicKey` (for off-ramp intents)
+- Replay protection via random nonces (`nonce`)
+- Canonical Ed25519 signatures over the normalized JSON hash (`intentHash`)
 
 Canonicalization rules live in `docs/CANONICAL_JSON.md` (sorted keys, no
 trailing whitespace, fixed UTF-8 encoding, integer normalization). The hash is
@@ -189,8 +171,7 @@ sequenceDiagram
   O-->>P: Event: OutcomeStored(intent_hash)
 ```
 
-Steps 1–11 are implemented today (single-anchor path, without SEP-38 — see
-§ 4). Steps 12–16 land with the reputation wave (v2).
+The lifecycle is implemented end to end: SEP-38 firm quotes, SEP-10 authentication, interactive SEP-24 / SEP-6 withdrawal with payment submission, and outcome reporting via `/api/reputation/append`, which the publisher then mirrors to the on-chain oracle.
 
 ---
 
@@ -255,18 +236,22 @@ Implemented in `lib/stellar/sep10.ts`. Key invariants:
   header on that anchor's SEP-24 endpoints. It is never passed cross-anchor.
 - **Ephemeral.** No JWT is persisted to localStorage or IndexedDB.
 
-### 4.3 SEP-24 — interactive withdrawal ✅
+### 4.3 SEP-24 / SEP-6 — withdrawal execution ✅
 
-`ExecuteDrawer` walks six steps, each with an error state and a cancel path:
+`ExecuteDrawer` (`components/offramp/ExecuteDrawer.tsx`) manages the interactive withdrawal lifecycle across discrete steps defined in `STEP_LABELS` (`ExecuteDrawerStep`):
 
-| Step             | Substrate            | What happens                                                                                                    | Failure recovery                                                        |
-| ---------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `authenticating` | SEP-10               | Fetch challenge, sign, exchange for JWT.                                                                        | Retry in-place; on rejection, return to idle.                           |
-| `initiating`     | SEP-24               | `POST /transactions/withdraw/interactive` with JWT.                                                             | Surface anchor error; retry with fresh JWT.                             |
-| `kyc`            | Anchor-hosted iframe | Open the returned URL in a popup. Anchor owns the KYC surface.                                                  | On popup close without success, poll `/transaction` for `pending_user`. |
-| `building`       | Horizon              | `buildWithdrawPayment` — construct the USDC payment to the anchor's receiving address at the quoted amount.     | Fee estimation retries; network reselect.                               |
-| `signing`        | Freighter            | User signs the payment XDR.                                                                                     | User-reject returns to idle; signature-required errors surface.         |
-| `done`           | —                    | Drawer closes; `onSuccess` hoists `{ transactionId, transferServer, jwt }` to the page; `StatusTracker` mounts. | Terminal.                                                               |
+| Step             | Substrate           | What happens                                                                                           | Failure recovery                                                        |
+| ---------------- | ------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `idle`           | —                   | Ready state awaiting execution start.                                                                  | Initial baseline.                                                       |
+| `authenticating` | SEP-10              | Fetch challenge, sign with Freighter, exchange for JWT.                                                | Retry in-place; on rejection, return to idle.                           |
+| `quoting`        | SEP-38              | Lock in a firm quote with the anchor when advertised.                                                  | Retry quote or fall back to standard flow.                              |
+| `initiating`     | SEP-24              | `POST /transactions/withdraw/interactive` with JWT.                                                    | Surface anchor error; retry with fresh JWT.                             |
+| `kyc`            | Anchor-hosted popup | Open interactive anchor URL in popup for user KYC.                                                     | On popup close without success, poll `/transaction` for `pending_user`. |
+| `form`           | Direct UI Form      | Render embedded KYC / transfer info form for SEP-6 endpoints.                                          | Form input validation; re-submission.                                   |
+| `building`       | Horizon             | `buildWithdrawPayment` — construct the payment to the anchor's receiving address at the quoted amount. | Fee estimation retries; network reselect.                               |
+| `signing`        | Freighter           | User signs the payment XDR in Freighter.                                                               | User-reject returns to idle; signature-required errors surface.         |
+| `done`           | —                   | Drawer closes; `onExecuteStarted` hoists tracking data to the page; `StatusTracker` mounts.            | Terminal success state.                                                 |
+| `error`          | —                   | Error state with classified error messages and retry action.                                           | In-place retry or cancel to return to idle.                             |
 
 **The `done` hoist is the fix for the tracker-never-mounts bug (#002).**
 Before `commit 45a82eb` the drawer completed the withdrawal but never told the
@@ -275,8 +260,7 @@ with a live `transactionId`.
 
 ### 4.4 SEP-24 status machine ✅
 
-The polling loop in `hooks/useWithdrawStatus.ts` fans these SEP-24 values into
-five UI states (`types/index.ts:105–119` is the authoritative enum):
+The polling loop in `hooks/useWithdrawStatus.ts` maps raw anchor status strings (`WithdrawStatusValue`) into canonical app-wide status states (`WithdrawStatus` in `types/index.ts`):
 
 ```mermaid
 stateDiagram-v2
@@ -372,24 +356,25 @@ tuple** the publisher writes to the Soroban oracle.
 ```mermaid
 sequenceDiagram
   autonumber
-  participant UI as Web UI
-  participant API as /api/outcomes
-  participant Q as Outcome queue
-  participant P as Publisher worker
-  participant O as Soroban oracle
+  actor Client as UI / Agent
+  participant Route as POST /api/reputation/append
+  participant Store as Postgres outcome_log
+  participant Cron as GET /api/publisher/tick
+  participant Pub as packages/publisher (runBatch)
+  participant Oracle as Soroban Oracle (submit_outcome)
 
-  UI->>API: POST outcome { intent_hash, anchor_id, delivered_rate, delivered_amount, settle_seconds, outcome, stellar_tx }
-  API->>API: Verify user-signed intent_hash exists; verify stellar_tx on-chain
-  API->>Q: Enqueue
-  Q->>P: Lease next outcome
-  P->>P: Canonicalize tuple; sign with publisher key
-  P->>O: invoke publish_outcome(tuple, sig)
-  O-->>P: Emits OutcomeStored(intent_hash, anchor_id, corridor)
-  P->>Q: Ack (on OutcomeStored receipt)
-  alt Transient error
-    P->>Q: Nack with backoff
-  else Fatal error (verified forgery)
-    P->>Q: Dead-letter + Sentry alert
+  Client->>Route: POST { intentHash, anchorId, corridor, outcome, quotedAmount, deliveredAmount, publicKey, signature, ... }
+  Route->>Route: Verify Ed25519 signature over intentHash
+  Route->>Store: Insert row into outcome_log (attested = TRUE)
+  Route-->>Client: 201 Created { ok: true, intentHash, attested: true }
+
+  loop Every 5 minutes
+    Cron->>Pub: Trigger tick
+    Pub->>Store: Select reconciled, unpublished outcomes
+    Pub->>Pub: Canonicalize outcome batch & sign with publisher key
+    Pub->>Oracle: Invoke submit_outcome(batch)
+    Oracle-->>Pub: Emits OutcomeStored event
+    Pub->>Store: Set published_at + oracle_tx_hash
   end
 ```
 
@@ -402,7 +387,7 @@ sequenceDiagram
 - **Publisher cannot invent.** The publisher key signs transport, not
   content. The on-chain contract verifies that the `intent_hash` references a
   known intent and that the `stellar_tx` exists on the public ledger.
-- **At-least-once delivery.** The queue is durable; Soroban writes are
+- **At-least-once delivery.** Outcome rows in `outcome_log` are durable; Soroban writes are
   idempotent keyed on `intent_hash`. A duplicate write returns the stored
   event, not a new one.
 - **Dead-letter on dispute.** If the anchor disputes an outcome inside the
@@ -505,31 +490,30 @@ and read reputation — with zero held keys.
 
 ### Tools
 
-| Tool                        | Input                                       | Output                 | Authority                                                   |
-| --------------------------- | ------------------------------------------- | ---------------------- | ----------------------------------------------------------- |
-| `list_corridors`            | —                                           | `Corridor[]`           | Read-only.                                                  |
-| `list_anchors_for_corridor` | `{ corridorId }`                            | `Anchor[]`             | Read-only.                                                  |
-| `quote_corridor`            | `{ corridorId, sellAmount, deliveryHint? }` | `Plan`                 | Read-only; RFQs live anchors.                               |
-| `build_intent`              | `{ plan, deadlineSeconds, preferences? }`   | `Intent` (unsigned)    | Read-only.                                                  |
-| `submit_signed_intent`      | `{ intent, signature }`                     | `{ transactionIds[] }` | Executes — requires user signature from the calling wallet. |
-| `read_reputation`           | `{ anchorId, corridorId }`                  | `Aggregate`            | Read-only.                                                  |
-| `read_outcome`              | `{ intentHash }`                            | `Outcome \| null`      | Read-only.                                                  |
-| `watch_transaction`         | `{ transactionId, transferServer, jwt }`    | Event stream           | Read-only.                                                  |
+| Tool                      | Purpose                                                                                                                                           | Hosted (`/api/mcp`) |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `intel.offramp.quote`     | Returns the live net-received quote for a corridor + amount (anchor, quoteId, netReceived, expiresAt).                                            | ✓                   |
+| `intel.offramp.prepare`   | Returns an unsigned intent envelope (intent + hash) and an unsigned Stellar transaction for agent signing.                                        | ✓                   |
+| `intel.execute`           | Verifies an agent-signed intent + transaction against the prepared intent and submits it to Horizon.                                              | ✓                   |
+| `intel.anchor.reputation` | Returns 7/30/90-day rolling percentile scorecards for an anchor (fill rate, settlement latency, slippage).                                        | ✓                   |
+| `intel.anchor.health`     | Returns the current status, consecutive failure count, degraded flag, last check timestamp, last error message, and staleness flag for an anchor. | ✓                   |
+| `intel.probe.coverage`    | Reports whether probe history is trustworthy yet: fleetThresholdMet, daysUntilFleetThreshold, and per-anchor continuous days.                     | ✓                   |
+| `intel.leaderboard`       | Returns anchors ranked by composite reputation score (fill rate, settlement speed, slippage).                                                     | ✓                   |
+| `intel.corridors`         | Lists every corridor Stellar Intel currently surfaces, with its id, display name, source asset, destination fiat currency, country, and anchors.  | ✓                   |
 
 ### Agent-safety invariants
 
-1. **No signing in the MCP.** `submit_signed_intent` _requires_ a signature
+1. **No signing in the MCP.** `intel.execute` _requires_ a signature
    produced by the end-user's wallet. The server never holds a key capable of
    moving funds.
 2. **Scoped JWTs.** The MCP never caches an anchor JWT longer than a single
    intent's lifetime.
-3. **Auditable.** Every `submit_signed_intent` call logs `intent_hash +
+3. **Auditable.** Every `intel.execute` call logs `intent_hash +
 signature + caller` to an append-only local log for the user to review.
 4. **Rate-limited.** Per-caller and per-account quote caps prevent an agent
    from hammering anchors during a runaway loop.
 
-Install: `claude mcp add stellar-intel npx -y @stellarintel/mcp@latest`.
-See `docs/MCP.md` for the end-to-end tutorial and three worked examples.
+Connect to the hosted endpoint at `https://stellar-intel.vercel.app/api/mcp` (Streamable HTTP) or run the local dev server with `npx tsx scripts/mcp/server.ts` (stdio). See [`docs/MCP.md`](MCP.md) for the end-to-end tutorial and worked examples.
 
 ---
 
@@ -572,10 +556,10 @@ stellar-intel/
 │   └── page.tsx
 ├── components/offramp/
 │   ├── RateTable.tsx              # ✅ live quote table
-│   ├── ExecuteDrawer.tsx          # ✅ 6-step SEP-10/24 flow
-│   ├── StatusTracker.tsx          # ✅ SEP-24 state machine UI
-│   ├── CountrySelector.tsx        # ✅
-│   └── CurrencySelector.tsx       # ✅
+│   ├── ExecuteDrawer.tsx          # ✅ interactive SEP-10/24/38/6 withdrawal flow
+│   └── StatusTracker.tsx          # ✅ SEP-24 state machine UI
+├── components/ui/
+│   └── CorridorSelector.tsx       # ✅ selectable off-ramp corridors
 ├── hooks/
 │   ├── useAnchorRates.ts          # ✅ SWR rate aggregation
 │   ├── useFreighter.ts            # ✅ wallet connection
@@ -586,7 +570,7 @@ stellar-intel/
 │   ├── analytics.ts               # ✅ funnel event tracking + PII redaction
 │   ├── utils.ts                   # ✅ computeTotalReceived, format helpers
 │   └── stellar/
-│       ├── anchors.ts             # ✅ registry (MoneyGram, Cowrie, Anclap)
+│       ├── anchors.ts             # ✅ registry (13 registered)
 │       ├── sep1.ts                # ✅ stellar.toml resolver
 │       ├── sep10.ts               # ✅ challenge → sign → JWT
 │       ├── sep24.ts               # ✅ /fee, /interactive, /transaction
@@ -632,54 +616,57 @@ Every `process.env` read in `app/` and `lib/` is listed below. The authoritative
 values and inline commentary live in `.env.example`; this table is the
 cross-reference for reviewers and contributors.
 
-| Variable                          | Required               | Default                                      | Where read                                        | Purpose                                                                                                                                                                                     |
-| --------------------------------- | ---------------------- | -------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_STELLAR_NETWORK`     | Yes                    | —                                            | `lib/config.ts`                                   | Network selection: `mainnet` or `testnet`.                                                                                                                                                  |
-| `NEXT_PUBLIC_HORIZON_URL`         | Yes                    | —                                            | `lib/config.ts`                                   | Horizon endpoint for payment submission.                                                                                                                                                    |
-| `NEXT_PUBLIC_USDC_ISSUER`         | Yes                    | —                                            | `lib/config.ts`                                   | Trusted USDC issuer public key.                                                                                                                                                             |
-| `NEXT_PUBLIC_APP_NAME`            | Yes                    | —                                            | `lib/config.ts`                                   | Application name; boot fails if unset.                                                                                                                                                      |
-| `NEXT_PUBLIC_STELLAR_EXPERT_URL`  | No                     | `https://api.stellar.expert/explorer/public` | `lib/config.ts`                                   | Base URL for Stellar Expert transaction links.                                                                                                                                              |
-| `NEXT_PUBLIC_SITE_URL`            | No                     | Vercel deployment URL                        | `app/layout.tsx`, `app/sitemap.ts`, several pages | Canonical origin for `<link rel="canonical">`, OG tags, sitemap, and robots.txt. When unset, all canonical and OG URLs resolve to the Vercel deployment domain rather than a custom domain. |
-| `NEXT_PUBLIC_PLAUSIBLE_DOMAIN`    | No                     | unset (no tracking)                          | `app/layout.tsx`                                  | Plausible Analytics domain. When unset, no tracking script is injected.                                                                                                                     |
-| `NEXT_PUBLIC_INTENT_FLOW`         | No                     | `'off'`                                      | `lib/flags.ts`                                    | Gates the signed-intent off-ramp path. Read as `=== 'true'` in `FLAGS` and as `!== 'off'` in `flags` — set to `'true'` to enable both consumers.                                            |
-| `NEXT_PUBLIC_REPUTATION_WRITES`   | No                     | on                                           | `lib/flags.ts`                                    | Gates submitting outcome tuples after a completed off-ramp. Set to `'off'` to disable.                                                                                                      |
-| `NEXT_PUBLIC_MCP_ADVERTISE`       | No                     | on                                           | `lib/flags.ts`                                    | Controls the MCP install banner in the UI. Set to `'off'` to hide.                                                                                                                          |
-| `NEXT_PUBLIC_V11_CORRIDORS`       | No                     | off                                          | `lib/flags.ts`                                    | Enables v1.1 corridors (ZAR, XOF). Must be `'on'`; a corridor still stays hidden until at least one anchor serves it.                                                                       |
-| `NEXT_PUBLIC_RECURRING_INTENTS`   | No                     | off                                          | `lib/flags.ts`                                    | Enables the sign-once recurring-intent engine. Must be `'on'`; effective only when `NEXT_PUBLIC_INTENT_FLOW` is also enabled.                                                               |
-| `NEXT_PUBLIC_MIN_OUTCOMES`        | No                     | `30`                                         | `lib/reputation/thresholds.ts`                    | Minimum recorded outcomes before a reputation score is considered statistically meaningful.                                                                                                 |
-| `ADMIN_SECRET_KEY`                | Yes (admin routes)     | —                                            | `lib/auth/admin.ts`                               | Bearer secret for `/admin/*` API routes and the dispute management surface.                                                                                                                 |
-| `CRON_SECRET`                     | Yes (cron routes)      | —                                            | `lib/api/cron-auth.ts`                            | Bearer secret for cron-triggered routes (publisher tick, reconcile, refresh).                                                                                                               |
-| `ROUTING_STRATEGY`                | No                     | `first-match`                                | `lib/env.ts`                                      | Router selection strategy: `first-match` (safe default) or `scored` (multi-factor).                                                                                                         |
-| `FEE_BUDGET_PCT`                  | No                     | `0.05`                                       | `lib/env.ts`                                      | Maximum acceptable anchor fee as a fraction of sell amount (e.g. `0.05` = 5%).                                                                                                              |
-| `SOROSWAP_API_KEY`                | Yes (swap hops)        | —                                            | `lib/stellar/soroswap.ts`                         | Soroswap aggregator API key. Unset causes `SoroswapConfigError` before any request.                                                                                                         |
-| `SOROSWAP_API_BASE_URL`           | No                     | `https://api.soroswap.finance`               | `lib/stellar/soroswap.ts`                         | Base URL for the Soroswap API. Override only for a local Soroswap instance.                                                                                                                 |
-| `ANCHOR_PAYMENT_ACCOUNTS`         | No                     | —                                            | `lib/intent/anchor-accounts.ts`                   | JSON map of anchor id to Stellar receiving address for the signed-intent off-ramp path. Unset means every corridor returns `NO_ROUTE`.                                                      |
-| `REPUTATION_BACKEND`              | No                     | `sqlite` (dev) / `postgres` (prod)           | `lib/reputation/store.ts`                         | Storage backend: `sqlite` or `postgres`. Overridden to `postgres` when `DATABASE_URL` is set.                                                                                               |
-| `DATABASE_URL`                    | Yes (postgres backend) | —                                            | `lib/reputation/pool.ts`                          | Postgres connection string. Presence implies the postgres backend.                                                                                                                          |
-| `LOG_LEVEL`                       | No                     | `info`                                       | `lib/logger.ts`                                   | Pino log level: `trace`, `debug`, `info`, `warn`, or `error`.                                                                                                                               |
-| `METRICS_RESET_WINDOW_MS`         | No                     | `3600000` (1 h)                              | `lib/metrics.ts`                                  | Rolling-window length for in-memory metrics counters.                                                                                                                                       |
-| `ORACLE_CONTRACT_ID`              | No                     | testnet default                              | `lib/oracle/deployment.ts`                        | Soroban reputation oracle contract address. Required for publisher and scripts targeting mainnet.                                                                                           |
-| `STELLAR_NETWORK`                 | Yes (publisher)        | —                                            | `lib/oracle/read.ts` (via publisher)              | Which network the publisher signs against. Has no default — an unset value used to mean mainnet, so the publisher now requires it explicitly.                                               |
-| `PUBLISHER_SECRET`                | Yes (publisher)        | —                                            | `app/api/publisher/tick/route.ts`                 | Secret key of a registered oracle publisher. Must not be the contract admin key.                                                                                                            |
-| `SOROBAN_RPC_URL`                 | No                     | derived from `STELLAR_NETWORK`               | `lib/oracle/read.ts`                              | Soroban RPC endpoint override. Set only for a custom or local RPC.                                                                                                                          |
-| `STELLAR_NETWORK_PASSPHRASE`      | No                     | derived from `STELLAR_NETWORK`               | `lib/oracle/read.ts`                              | Soroban network passphrase override for oracle reads. Override only in combination with a matching `SOROBAN_RPC_URL`.                                                                       |
-| `HORIZON_URL`                     | No                     | derived from `STELLAR_NETWORK`               | oracle scripts                                    | Server-side Horizon endpoint override.                                                                                                                                                      |
-| `BATCH_SIZE`                      | No                     | `DEFAULT_BATCH_SIZE` in packages/publisher   | `app/api/publisher/tick/route.ts`                 | Rows per publisher batch.                                                                                                                                                                   |
-| `PUBLISH_GATE_OVERRIDE`           | No                     | unset (gate on)                              | publisher                                         | Bypasses the 90-day probe-coverage gate on mainnet publishes. Must be exactly `'true'`; logs at error level when used.                                                                      |
-| `MAINNET_DEPLOYER_KEY`            | No                     | —                                            | `scripts/deploy-oracle-mainnet.ts`                | Deployer key for mainnet contract deployment scripts. Leave unset otherwise.                                                                                                                |
-| `RATES_TOML_TIMEOUT_MS`           | No                     | `8000`                                       | `lib/stellar/server-rates.ts`                     | TOML fetch timeout in milliseconds.                                                                                                                                                         |
-| `RATES_SEP38_TIMEOUT_MS`          | No                     | `8000`                                       | `lib/stellar/server-rates.ts`                     | SEP-38 quote fetch timeout in milliseconds.                                                                                                                                                 |
-| `RATES_SEP24_INFO_TIMEOUT_MS`     | No                     | `8000`                                       | `lib/stellar/server-rates.ts`                     | SEP-24 /info fetch timeout in milliseconds.                                                                                                                                                 |
-| `RATES_TOML_RETRY_ATTEMPTS`       | No                     | `1`                                          | `lib/stellar/server-rates.ts`                     | Retry count for TOML fetches on network errors.                                                                                                                                             |
-| `RATES_SEP38_RETRY_ATTEMPTS`      | No                     | `1`                                          | `lib/stellar/server-rates.ts`                     | Retry count for SEP-38 quote fetches on network errors.                                                                                                                                     |
-| `RATES_SEP24_INFO_RETRY_ATTEMPTS` | No                     | `1`                                          | `lib/stellar/server-rates.ts`                     | Retry count for SEP-24 /info fetches on network errors.                                                                                                                                     |
-| `ANCHOR_HEALTH_LEDGER_REPO`       | No                     | `ezedike-evan/stellar-intel`                 | `lib/stellar/health-ledger.ts`                    | Repository whose git history backs dated lookups on `/api/v1/anchor-health/ledger`. Point at a fork or mirror when the deployment does not track upstream.                                  |
-| `GITHUB_TOKEN`                    | No                     | unset (60 req/h per IP)                      | `lib/stellar/health-ledger.ts`                    | Raises the GitHub API allowance for dated ledger lookups. Needs no scopes for a public repository; requests for the latest ledger never call GitHub.                                        |
-| `QUOTE_DRIFT_THRESHOLD_PERCENT`   | No                     | `3`                                          | `lib/reputation/thresholds.ts`                    | Quote drift alert threshold (percent deviation from cross-anchor median). Flagging is informational; no auto-exclusion.                                                                     |
-| `ANCHOR_DEGRADE_THRESHOLD`        | No                     | `3`                                          | `lib/reputation/thresholds.ts`                    | Consecutive failing probe cycles before an anchor is marked `degraded`. Shared with `scripts/validate-anchors.mjs`.                                                                         |
-| `ANCHOR_DOWN_THRESHOLD`           | No                     | `2 × ANCHOR_DEGRADE_THRESHOLD`               | `lib/reputation/thresholds.ts`                    | Consecutive failing probe cycles before escalation to `down`. Floored at `ANCHOR_DEGRADE_THRESHOLD`.                                                                                        |
-| `PROBE_LATENCY_BUDGET_MS`         | No                     | `5000`                                       | `lib/reputation/thresholds.ts`                    | Maximum tolerated quote latency. Slower-than-budget responses count as a latency-dimension probe failure.                                                                                   |
-| `TEST_SEP24_INFO`                 | No (test only)         | unset                                        | `lib/stellar/sep24.ts`                            | When set in `NODE_ENV=test`, enables real SEP-24 /info requests instead of mock data. Has no effect in production.                                                                          |
+| Variable                          | Required               | Default                                                 | Where read                                        | Purpose                                                                                                                                                                                     |
+| --------------------------------- | ---------------------- | ------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_STELLAR_NETWORK`     | Yes                    | —                                                       | `lib/config.ts`                                   | Network selection: `mainnet` or `testnet`.                                                                                                                                                  |
+| `NEXT_PUBLIC_HORIZON_URL`         | Yes                    | —                                                       | `lib/config.ts`                                   | Horizon endpoint for payment submission.                                                                                                                                                    |
+| `NEXT_PUBLIC_USDC_ISSUER`         | Yes                    | —                                                       | `lib/config.ts`                                   | Trusted USDC issuer public key.                                                                                                                                                             |
+| `NEXT_PUBLIC_APP_NAME`            | Yes                    | —                                                       | `lib/config.ts`                                   | Application name; boot fails if unset.                                                                                                                                                      |
+| `NEXT_PUBLIC_STELLAR_EXPERT_URL`  | No                     | `https://api.stellar.expert/explorer/public`            | `lib/config.ts`                                   | Base URL for Stellar Expert transaction links.                                                                                                                                              |
+| `NEXT_PUBLIC_SITE_URL`            | No                     | Vercel deployment URL                                   | `app/layout.tsx`, `app/sitemap.ts`, several pages | Canonical origin for `<link rel="canonical">`, OG tags, sitemap, and robots.txt. When unset, all canonical and OG URLs resolve to the Vercel deployment domain rather than a custom domain. |
+| `NEXT_PUBLIC_PLAUSIBLE_DOMAIN`    | No                     | unset (no tracking)                                     | `app/layout.tsx`                                  | Plausible Analytics domain. When unset, no tracking script is injected.                                                                                                                     |
+| `NEXT_PUBLIC_INTENT_FLOW`         | No                     | `'off'`                                                 | `lib/flags.ts`                                    | Gates the signed-intent off-ramp path. Read as `=== 'true'` in `FLAGS` and as `!== 'off'` in `flags` — set to `'true'` to enable both consumers.                                            |
+| `NEXT_PUBLIC_REPUTATION_WRITES`   | No                     | on                                                      | `lib/flags.ts`                                    | Gates submitting outcome tuples after a completed off-ramp. Set to `'off'` to disable.                                                                                                      |
+| `NEXT_PUBLIC_MCP_ADVERTISE`       | No                     | on                                                      | `lib/flags.ts`                                    | Controls the MCP install banner in the UI. Set to `'off'` to hide.                                                                                                                          |
+| `NEXT_PUBLIC_V11_CORRIDORS`       | No                     | off                                                     | `lib/flags.ts`                                    | Enables v1.1 corridors (ZAR, XOF). Must be `'on'`; a corridor still stays hidden until at least one anchor serves it.                                                                       |
+| `NEXT_PUBLIC_RECURRING_INTENTS`   | No                     | off                                                     | `lib/flags.ts`                                    | Enables the sign-once recurring-intent engine. Must be `'on'`; effective only when `NEXT_PUBLIC_INTENT_FLOW` is also enabled.                                                               |
+| `NEXT_PUBLIC_MIN_OUTCOMES`        | No                     | `30`                                                    | `lib/reputation/thresholds.ts`                    | Minimum recorded outcomes before a reputation score is considered statistically meaningful.                                                                                                 |
+| `ADMIN_SECRET_KEY`                | Yes (admin routes)     | —                                                       | `lib/auth/admin.ts`                               | Bearer secret for `/admin/*` API routes and the dispute management surface.                                                                                                                 |
+| `CRON_SECRET`                     | Yes (cron routes)      | —                                                       | `lib/api/cron-auth.ts`                            | Bearer secret for cron-triggered routes (publisher tick, reconcile, refresh).                                                                                                               |
+| `ROUTING_STRATEGY`                | No                     | `first-match`                                           | `lib/env.ts`                                      | Router selection strategy: `first-match` (safe default) or `scored` (multi-factor).                                                                                                         |
+| `FEE_BUDGET_PCT`                  | No                     | `100` (no limit)                                        | `lib/env.ts`                                      | Maximum acceptable anchor fee as a percentage of the sell amount (e.g. `1` = 1%); `100` disables the check.                                                                                 |
+| `SOROSWAP_API_KEY`                | Yes (swap hops)        | —                                                       | `lib/stellar/soroswap.ts`                         | Soroswap aggregator API key. Unset causes `SoroswapConfigError` before any request.                                                                                                         |
+| `SOROSWAP_API_BASE_URL`           | No                     | `https://api.soroswap.finance`                          | `lib/stellar/soroswap.ts`                         | Base URL for the Soroswap API. Override only for a local Soroswap instance.                                                                                                                 |
+| `ANCHOR_PAYMENT_ACCOUNTS`         | No                     | —                                                       | `lib/intent/anchor-accounts.ts`                   | JSON map of anchor id to Stellar receiving address for the signed-intent off-ramp path. Unset means every corridor returns `NO_ROUTE`.                                                      |
+| `REPUTATION_BACKEND`              | No                     | `sqlite` (dev) / `postgres` (prod)                      | `lib/reputation/store.ts`                         | Storage backend: `sqlite` or `postgres`. Overridden to `postgres` when `DATABASE_URL` is set.                                                                                               |
+| `DATABASE_URL`                    | Yes (postgres backend) | —                                                       | `lib/reputation/pool.ts`                          | Postgres connection string. Presence implies the postgres backend.                                                                                                                          |
+| `LOG_LEVEL`                       | No                     | `info`                                                  | `lib/logger.ts`                                   | Pino log level: `trace`, `debug`, `info`, `warn`, or `error`.                                                                                                                               |
+| `METRICS_RESET_WINDOW_MS`         | No                     | `3600000` (1 h)                                         | `lib/metrics.ts`                                  | Rolling-window length for in-memory metrics counters.                                                                                                                                       |
+| `ORACLE_CONTRACT_ID`              | No                     | testnet default                                         | `lib/oracle/deployment.ts`                        | Soroban reputation oracle contract address. Required for publisher and scripts targeting mainnet.                                                                                           |
+| `STELLAR_NETWORK`                 | Yes (publisher)        | —                                                       | `lib/oracle/read.ts` (via publisher)              | Which network the publisher signs against. Has no default — an unset value used to mean mainnet, so the publisher now requires it explicitly.                                               |
+| `PUBLISHER_SECRET`                | Yes (publisher)        | —                                                       | `app/api/publisher/tick/route.ts`                 | Secret key of a registered oracle publisher. Must not be the contract admin key.                                                                                                            |
+| `SOROBAN_RPC_URL`                 | No                     | derived from `STELLAR_NETWORK`                          | `lib/oracle/read.ts`                              | Soroban RPC endpoint override. Set only for a custom or local RPC.                                                                                                                          |
+| `STELLAR_NETWORK_PASSPHRASE`      | No                     | derived from `STELLAR_NETWORK`                          | `lib/oracle/read.ts`                              | Soroban network passphrase override for oracle reads. Override only in combination with a matching `SOROBAN_RPC_URL`.                                                                       |
+| `HORIZON_URL`                     | No                     | derived from `STELLAR_NETWORK`                          | oracle scripts                                    | Server-side Horizon endpoint override.                                                                                                                                                      |
+| `BATCH_SIZE`                      | No                     | `DEFAULT_BATCH_SIZE` in packages/publisher              | `app/api/publisher/tick/route.ts`                 | Rows per publisher batch.                                                                                                                                                                   |
+| `PROBE_WINDOW_DAYS`               | No                     | `7` (`DEFAULT_PROBE_WINDOW_DAYS` in packages/publisher) | `app/api/publisher/tick/route.ts`                 | Lookback window in days for publisher probe signal samples.                                                                                                                                 |
+| `PUBLISH_GATE_OVERRIDE`           | No                     | unset (gate on)                                         | publisher                                         | Bypasses the 90-day probe-coverage gate on mainnet publishes. Must be exactly `'true'`; logs at error level when used.                                                                      |
+| `MAINNET_DEPLOYER_KEY`            | No                     | —                                                       | `scripts/deploy-oracle-mainnet.ts`                | Deployer key for mainnet contract deployment scripts. Leave unset otherwise.                                                                                                                |
+| `RATES_TOML_TIMEOUT_MS`           | No                     | `8000`                                                  | `lib/stellar/server-rates.ts`                     | TOML fetch timeout in milliseconds.                                                                                                                                                         |
+| `RATES_SEP38_TIMEOUT_MS`          | No                     | `8000`                                                  | `lib/stellar/server-rates.ts`                     | SEP-38 quote fetch timeout in milliseconds.                                                                                                                                                 |
+| `RATES_SEP24_INFO_TIMEOUT_MS`     | No                     | `8000`                                                  | `lib/stellar/server-rates.ts`                     | SEP-24 /info fetch timeout in milliseconds.                                                                                                                                                 |
+| `RATES_TOML_RETRY_ATTEMPTS`       | No                     | `1`                                                     | `lib/stellar/server-rates.ts`                     | Retry count for TOML fetches on network errors.                                                                                                                                             |
+| `RATES_SEP38_RETRY_ATTEMPTS`      | No                     | `1`                                                     | `lib/stellar/server-rates.ts`                     | Retry count for SEP-38 quote fetches on network errors.                                                                                                                                     |
+| `RATES_SEP24_INFO_RETRY_ATTEMPTS` | No                     | `1`                                                     | `lib/stellar/server-rates.ts`                     | Retry count for SEP-24 /info fetches on network errors.                                                                                                                                     |
+| `RATES_TIMEOUT_MS`                | No                     | `8000`                                                  | `lib/stellar/soroswap.ts`                         | Timeout in milliseconds for Soroswap API requests.                                                                                                                                          |
+| `RATES_MAX_RETRIES`               | No                     | `2`                                                     | `lib/stellar/soroswap.ts`                         | Retry count for Soroswap API requests on network errors.                                                                                                                                    |
+| `ANCHOR_HEALTH_LEDGER_REPO`       | No                     | `ezedike-evan/stellar-intel`                            | `lib/stellar/health-ledger.ts`                    | Repository whose git history backs dated lookups on `/api/v1/anchor-health/ledger`. Point at a fork or mirror when the deployment does not track upstream.                                  |
+| `GITHUB_TOKEN`                    | No                     | unset (60 req/h per IP)                                 | `lib/stellar/health-ledger.ts`                    | Raises the GitHub API allowance for dated ledger lookups. Needs no scopes for a public repository; requests for the latest ledger never call GitHub.                                        |
+| `QUOTE_DRIFT_THRESHOLD_PERCENT`   | No                     | `3`                                                     | `lib/reputation/thresholds.ts`                    | Quote drift alert threshold (percent deviation from cross-anchor median). Flagging is informational; no auto-exclusion.                                                                     |
+| `ANCHOR_DEGRADE_THRESHOLD`        | No                     | `3`                                                     | `lib/reputation/thresholds.ts`                    | Consecutive failing probe cycles before an anchor is marked `degraded`. Shared with `scripts/validate-anchors.mjs`.                                                                         |
+| `ANCHOR_DOWN_THRESHOLD`           | No                     | `2 × ANCHOR_DEGRADE_THRESHOLD`                          | `lib/reputation/thresholds.ts`                    | Consecutive failing probe cycles before escalation to `down`. Floored at `ANCHOR_DEGRADE_THRESHOLD`.                                                                                        |
+| `PROBE_LATENCY_BUDGET_MS`         | No                     | `5000`                                                  | `lib/reputation/thresholds.ts`                    | Maximum tolerated quote latency. Slower-than-budget responses count as a latency-dimension probe failure.                                                                                   |
+| `TEST_SEP24_INFO`                 | No (test only)         | unset                                                   | `lib/stellar/sep24.ts`                            | When set in `NODE_ENV=test`, enables real SEP-24 /info requests instead of mock data. Has no effect in production.                                                                          |
 
 ---
 

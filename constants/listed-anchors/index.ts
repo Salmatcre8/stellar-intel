@@ -9,9 +9,12 @@
 import type { ListedAnchor } from '@/types';
 import { parseListedAnchors } from '@/lib/stellar/listed-anchor-schema';
 
+import afreum from './afreum.json';
 import apsTokens from './aps-tokens.json';
+import aquarius from './aquarius.json';
 import audd from './audd.json';
 import bitbond from './bitbond.json';
+import blackRidgeTrust from './black-ridge-trust.json';
 import fxdao from './fxdao.json';
 import gmoTrust from './gmo-trust.json';
 import gratz from './gratz.json';
@@ -29,11 +32,15 @@ import reyts from './reyts.json';
 import stronghold from './stronghold.json';
 import ultraCapital from './ultra-capital.json';
 import valtorum from './valtorum.json';
+import vnx from './vnx.json';
 
 const RAW: unknown[] = [
+  afreum,
   apsTokens,
+  aquarius,
   audd,
   bitbond,
+  blackRidgeTrust,
   fxdao,
   gmoTrust,
   gratz,
@@ -51,6 +58,7 @@ const RAW: unknown[] = [
   stronghold,
   ultraCapital,
   valtorum,
+  vnx,
 ];
 
 export const LISTED_ANCHORS: readonly ListedAnchor[] = parseListedAnchors(RAW);
