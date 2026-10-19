@@ -92,18 +92,18 @@ mapping is now written down rather than assumed.
 Counts are from the [milestone
 list](https://github.com/ezedike-evan/stellar-intel/milestones) on 2026-08-28.
 
-| Wave in this document                               | Milestone                        | Tickets     | Issues            |
-| --------------------------------------------------- | -------------------------------- | ----------- | ----------------- |
-| [Wave 1.0](#wave-10--core-executable)               | `v1.0`                           | `#001–#070` | 70 closed         |
-| [Wave 1.1](#wave-11--hardening--sep-38)             | `v1.1`                           | `#071–#110` | 40 closed         |
-| [Wave 1.2](#wave-12--router--seeds)                 | `v1.2`                           | `#111–#140` | 30 closed         |
-| [Wave 1.3](#wave-13--polish--release-gate)          | `v1.3`                           | `#141–#150` | 10 closed         |
-| [Wave 1.4](#wave-14--sep-6)                         | `v1.4 SEP-6`                     | `B001–B025` | 25 closed         |
-| [Wave 1.5](#wave-15--anchor-fleet)                  | `v1.5 Anchor Fleet`              | `B026–B070` | 45 closed         |
-| [Wave 1.6](#wave-16--landing-polish)                | `v1.6 Landing Polish`            | `B071–B100` | 30 closed         |
-| [Wave 2.0](#wave-20--reputation-as-product-surface) | `v2.0`                           | `#151–#180` | 30 closed         |
-| [Wave 2.1](#wave-21--soroban-oracle-live)           | `v2.1`                           | `#181–#205` | 20 closed         |
-| [Rung 1](#rung-1--data-infra)                       | `H1 Rung 1 — Data Infra + Grant` | `D001–D077` | 76 closed, 1 open |
+| Wave in this document                               | Milestone                        | Tickets     | Issues                                                     |
+| --------------------------------------------------- | -------------------------------- | ----------- | ---------------------------------------------------------- |
+| [Wave 1.0](#wave-10--core-executable)               | `v1.0`                           | `#001–#070` | 70 closed                                                  |
+| [Wave 1.1](#wave-11--hardening--sep-38)             | `v1.1`                           | `#071–#110` | 40 closed                                                  |
+| [Wave 1.2](#wave-12--router--seeds)                 | `v1.2`                           | `#111–#140` | 30 closed                                                  |
+| [Wave 1.3](#wave-13--polish--release-gate)          | `v1.3`                           | `#141–#150` | 10 closed                                                  |
+| [Wave 1.4](#wave-14--sep-6)                         | `v1.4 SEP-6`                     | `B001–B025` | 25 closed                                                  |
+| [Wave 1.5](#wave-15--anchor-fleet)                  | `v1.5 Anchor Fleet`              | `B026–B070` | 45 closed                                                  |
+| [Wave 1.6](#wave-16--landing-polish)                | `v1.6 Landing Polish`            | `B071–B100` | 30 closed                                                  |
+| [Wave 2.0](#wave-20--reputation-as-product-surface) | `v2.0`                           | `#151–#180` | 30 closed                                                  |
+| [Wave 2.1](#wave-21--soroban-oracle-live)           | `v2.1`                           | `#181–#205` | 20 closed                                                  |
+| [Rung 1](#rung-1--data-infra)                       | `H1 Rung 1 — Data Infra + Grant` | `D001–D077` | 77 closed (D070 closed with the contract side outstanding) |
 
 **Three ticket series, not one.** The `#NNN` series is this document's original
 decomposition; `B` and `D` are later series filed against their own milestones.
@@ -519,9 +519,10 @@ milestone](#v2-scope-with-no-milestone) — real decomposition, unscheduled.
 
 ### Rung 1 — Data Infra
 
-> Tickets: `D001–D077`. Milestone `H1 Rung 1 — Data Infra + Grant`, **open** —
-> 76 closed, 1 open. This is the only milestone with open work in it, and it is
-> where the last several months of commits actually landed.
+> Tickets: `D001–D077`. Milestone `H1 Rung 1 — Data Infra + Grant` — all of its
+> issues are closed. D070's on-chain half is still outstanding (the publisher
+> side shipped; the contract has no `publish_probe_signals` entrypoint), and it
+> is where the last several months of commits actually landed.
 
 **Why it is not called "Wave 2.2".** It was filed under the Horizon/Rung
 structure this document used before it moved to waves, and it never got
@@ -548,13 +549,18 @@ had to happen alongside them.
 - [x] Terms of service, financial disclaimer, consent flow (`D052–D056`)
 - [x] Accessibility: focus trap, `aria-live` rate updates, site-wide contrast
       (`D067–D069`)
-- [ ] `D070` Publish probe-derived signals on-chain — extend the publisher
-      beyond `outcome_log`
-      ([#785](https://github.com/ezedike-evan/stellar-intel/issues/785))
+- [-] `D070` Publish probe-derived signals on-chain — extend the publisher
+  beyond `outcome_log`
+  ([#785](https://github.com/ezedike-evan/stellar-intel/issues/785)).
+  Publisher side shipped (`publishProbeSignals` in `packages/publisher`);
+  the contract has no `publish_probe_signals` entrypoint, so the call is
+  skipped and nothing is written on-chain
 
 **Rung 1 release gate.**
 
-- [ ] `D070` closed — the last open issue in the milestone
+- [-] `D070` closed — publisher side shipped (`publishProbeSignals`), but the
+  contract has no `publish_probe_signals` entrypoint, so nothing reaches
+  the chain yet
 - [x] The 90-day gate is a refusal in the publish path, not a convention
 - [x] Probe coverage is queryable at `GET /api/reputation/probe-coverage`
 
