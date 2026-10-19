@@ -616,7 +616,7 @@ rather than as gates that are pending.
 - [x] `#231` `GET /v1/public/scores` (anchor, corridor) → score (`app/v1/public/scores/route.ts`)
 - [ ] `#232` `GET /v1/public/outcomes` paginated feed
 - [ ] `#233` Rate limits + API-key tier (free / paid)
-- [x] `#234` OpenAPI spec generated to `public/openapi.json` (15 endpoints, 15 schemas)
+- [x] `#234` OpenAPI spec generated to `public/openapi.json`
 - [x] `#235` `api-docs` page at `/docs/api` (interactive playground with live try-it panels)
 - [ ] `#239` **Probe service** (independent track) — nightly $1 synthetic
       off-ramps to seed corridor coverage
@@ -756,11 +756,13 @@ decomposed into the child issues below.
       directly over Soroban RPC, independent of the REST API being up
       ([#868](https://github.com/ezedike-evan/stellar-intel/issues/868)).
       `crates/stellar-intel-client` (#982); not yet on crates.io
-- [x] **Webhooks with HMAC signing** — subscribe to intent/settlement
-      lifecycle events instead of polling; signed deliveries, retry with
-      backoff, dead-letter after repeated failures
-      ([#869](https://github.com/ezedike-evan/stellar-intel/issues/869)).
-      `app/api/webhooks/*` + `lib/webhooks/sign.ts`
+- [-] **Webhooks with HMAC signing** — subscribe to intent/settlement
+  lifecycle events instead of polling; signed deliveries, retry with
+  backoff, dead-letter after repeated failures
+  ([#869](https://github.com/ezedike-evan/stellar-intel/issues/869)).
+  `app/api/webhooks/*` + `lib/webhooks/sign.ts`. Subscription API and
+  HMAC signing shipped; no production code emits events yet
+  (`dispatchEvent` has no caller)
 - [x] **GraphQL layer (additive)** — query corridor rates, anchor
       reputation, and intent status in one round trip, alongside the REST
       API rather than replacing it
@@ -798,10 +800,13 @@ above. Each is gated on something that does not exist yet, which is why no
 wave claimed them. Recorded here so the sequencing is not lost; placement is
 still open.
 
-- [ ] **Recurring intents / subscription remittance** — sign once, later
-      executions run without a fresh signature. Gated on wallet pre-auth
-      standards: Freighter exposes no pre-authorization primitive today, so
-      this cannot start until that lands upstream
+- [-] **Recurring intents / subscription remittance** — sign once, later
+  executions run without a fresh signature. A flag-gated implementation
+  exists (`lib/recurring/`, `types/recurring.ts`, behind
+  `NEXT_PUBLIC_RECURRING_INTENTS` in `lib/flags.ts`, off by default).
+  Still gated on wallet pre-auth standards: Freighter exposes no
+  pre-authorization primitive today, so executions without a fresh
+  signature cannot ship until that lands upstream
 - [ ] **Settlement-guaranteed SLA** — gated on ~10k actuarial observations
       before a guarantee can be priced; start with $100 caps. Reads the same
       outcome log the reputation write path already produces
